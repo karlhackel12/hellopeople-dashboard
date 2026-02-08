@@ -1,13 +1,11 @@
 'use client';
 
-import { use } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useMission } from '@/hooks/useMissions';
-import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Circle, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
@@ -32,13 +30,42 @@ const stepStatusIcon = (status: string) => {
   }
 };
 
+function safeFormat(dateStr: string | null | undefined, fmt: string) {
+  if (!dateStr) return '';
+  try { return format(new Date(dateStr), fmt); } catch { return dateStr; }
+}
+
+function safeDistance(dateStr: string | null | undefined, opts?: any) {
+  if (!dateStr) return '';
+  try { return formatDistanceToNow(new Date(dateStr), opts); } catch { return ''; }
+}
+
 export default function MissionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { mission, loading, error } = useMission(id);
+  const [mission, setMission] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMission = async () => {
+      try {
+        const res = await fetch(`/api/missions?id=${id}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        setMission(json.data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMission();
+  }, [id]);
 
   if (loading) {
     return (
@@ -54,7 +81,7 @@ export default function MissionDetailPage({
         <Card>
           <CardContent className="py-12 text-center">
             <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-muted-foreground">Mission not found</p>
+            <p className="text-muted-foreground">{error || 'Mission not found'}</p>
             <Link href="/missions">
               <Button className="mt-4">Back to Missions</Button>
             </Link>
@@ -64,10 +91,10 @@ export default function MissionDetailPage({
     );
   }
 
-  // Use real steps from DB (joined via API), fallback to proposal.step_kinds
-  const steps = (mission as any).steps || [];
+  const steps = Array.isArray(mission.steps) ? mission.steps : [];
   const completedSteps = steps.filter((s: any) => s.status === 'succeeded').length;
   const progress = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
+  const proposal = mission.proposal || {};
 
   return (
     <div className="flex-1 space-y-6 p-8">
@@ -82,16 +109,15 @@ export default function MissionDetailPage({
             <Badge className={statusColors[mission.status] || 'bg-gray-500'}>{mission.status}</Badge>
           </div>
           <h2 className="text-3xl font-bold tracking-tight">
-            {mission.proposal?.title || 'Untitled Mission'}
+            {proposal.title || 'Untitled Mission'}
           </h2>
           <p className="text-muted-foreground">
-            Agent: {mission.proposal?.agent_id || 'Unknown'}
+            Agent: {proposal.agent_id || 'Unknown'}
           </p>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
           {/* Description */}
           <Card>
@@ -100,12 +126,12 @@ export default function MissionDetailPage({
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                {mission.proposal?.description || 'No description provided'}
+                {proposal.description || 'No description provided'}
               </p>
             </CardContent>
           </Card>
 
-          {/* Steps Progress */}
+          {/* Steps */}
           <Card>
             <CardHeader>
               <CardTitle>Progress</CardTitle>
@@ -117,26 +143,15 @@ export default function MissionDetailPage({
               <Progress value={progress} className="h-3 mb-6" />
               <div className="space-y-4">
                 {steps.map((step: any, index: number) => (
-                  <div
-                    key={step.id || index}
-                    className="flex items-start gap-3 pb-4 border-b last:border-0"
-                  >
-                    <div className="mt-0.5">
-                      {stepStatusIcon(step.status)}
-                    </div>
+                  <div key={step.id || index} className="flex items-start gap-3 pb-4 border-b last:border-0">
+                    <div className="mt-0.5">{stepStatusIcon(step.status || 'queued')}</div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">
-                          Step {index + 1}: {step.step_kind}
-                        </p>
-                        <Badge variant="outline" className="text-xs">
-                          {step.status}
-                        </Badge>
+                        <p className="font-medium">Step {index + 1}: {step.step_kind || 'unknown'}</p>
+                        <Badge variant="outline" className="text-xs">{step.status || 'queued'}</Badge>
                       </div>
                       {step.last_error && (
-                        <p className="text-sm text-red-500 mt-1">
-                          Error: {step.last_error}
-                        </p>
+                        <p className="text-sm text-red-500 mt-1">Error: {step.last_error}</p>
                       )}
                       {step.output && (
                         <details className="mt-2">
@@ -144,7 +159,7 @@ export default function MissionDetailPage({
                             View output
                           </summary>
                           <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded-lg overflow-auto mt-2 max-h-60">
-                            {JSON.stringify(step.output, null, 2)}
+                            {typeof step.output === 'string' ? step.output : JSON.stringify(step.output, null, 2)}
                           </pre>
                         </details>
                       )}
@@ -161,87 +176,54 @@ export default function MissionDetailPage({
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Timeline */}
           <Card>
-            <CardHeader>
-              <CardTitle>Timeline</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Timeline</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               {mission.started_at && (
                 <div>
                   <p className="text-sm font-medium">Started</p>
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(mission.started_at), 'PPpp')}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(mission.started_at), { addSuffix: true })}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{safeFormat(mission.started_at, 'PPpp')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{safeDistance(mission.started_at, { addSuffix: true })}</p>
                 </div>
               )}
-
               {mission.finished_at && (
                 <div>
                   <p className="text-sm font-medium">Finished</p>
-                  <p className="text-sm text-muted-foreground">
-                    {format(new Date(mission.finished_at), 'PPpp')}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(mission.finished_at), { addSuffix: true })}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{safeFormat(mission.finished_at, 'PPpp')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{safeDistance(mission.finished_at, { addSuffix: true })}</p>
                 </div>
               )}
-
-              {mission.started_at && mission.finished_at && (
-                <div>
-                  <p className="text-sm font-medium">Duration</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(mission.started_at), { 
-                      includeSeconds: true 
-                    }).replace('about ', '~')}
-                  </p>
-                </div>
-              )}
-
               {mission.started_at && !mission.finished_at && (
                 <div>
                   <p className="text-sm font-medium">Running for</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(mission.started_at))}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{safeDistance(mission.started_at)}</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Metadata */}
           <Card>
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Details</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div>
                 <p className="text-sm font-medium">Mission ID</p>
-                <p className="text-xs text-muted-foreground font-mono">{mission.id}</p>
+                <p className="text-xs text-muted-foreground font-mono break-all">{mission.id}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Proposal ID</p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  {mission.proposal_id}
-                </p>
+                <p className="text-xs text-muted-foreground font-mono break-all">{mission.proposal_id}</p>
               </div>
-              {mission.proposal?.agent_id && (
+              {proposal.agent_id && (
                 <div>
                   <p className="text-sm font-medium">Agent</p>
-                  <p className="text-sm text-muted-foreground">
-                    {mission.proposal.agent_id}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{proposal.agent_id}</p>
                 </div>
               )}
-              {mission.proposal?.step_kinds && (
+              {Array.isArray(proposal.step_kinds) && proposal.step_kinds.length > 0 && (
                 <div>
                   <p className="text-sm font-medium">Step Kinds</p>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {mission.proposal.step_kinds.map((sk: string) => (
+                    {proposal.step_kinds.map((sk: string) => (
                       <Badge key={sk} variant="outline" className="text-xs">{sk}</Badge>
                     ))}
                   </div>
