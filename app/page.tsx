@@ -21,12 +21,15 @@ export default function DashboardPage() {
   // Fetch objectives
   useEffect(() => {
     const fetchObjectives = async () => {
-      const { data } = await supabase
-        .from('hp_objectives')
-        .select('*')
-        .eq('status', 'active')
-        .limit(3);
-      if (data) setObjectives(data);
+      try {
+        const response = await fetch('/api/objectives?status=active&limit=3');
+        if (response.ok) {
+          const { data } = await response.json();
+          if (data) setObjectives(data);
+        }
+      } catch (error) {
+        console.error('Error fetching objectives:', error);
+      }
     };
     fetchObjectives();
   }, []);
@@ -34,14 +37,15 @@ export default function DashboardPage() {
   // Fetch next conversation
   useEffect(() => {
     const fetchNextConversation = async () => {
-      const { data } = await supabase
-        .from('hp_roundtable_queue')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-      if (data) setNextConversation(data);
+      try {
+        const response = await fetch('/api/conversations?status=pending&next=true');
+        if (response.ok) {
+          const { data } = await response.json();
+          if (data) setNextConversation(data);
+        }
+      } catch (error) {
+        console.error('Error fetching next conversation:', error);
+      }
     };
     fetchNextConversation();
   }, []);
@@ -61,60 +65,28 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        console.log('🔍 Fetching metrics from Supabase...');
+        console.log('🔍 Fetching metrics via API...');
         
-        // Count active agents (from relationships - unique agent_a + agent_b)
-        const { data: relationships, error: relsError } = await supabase
-          .from('hp_agent_relationships')
-          .select('agent_a, agent_b');
-        
-        if (relsError) {
-          console.error('❌ Error fetching relationships:', relsError);
+        const response = await fetch('/api/metrics');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      
-      const uniqueAgents = new Set<string>();
-      relationships?.forEach(r => {
-        uniqueAgents.add(r.agent_a);
-        uniqueAgents.add(r.agent_b);
-      });
-      const activeAgents = uniqueAgents.size;
+        
+        const { data, error } = await response.json();
+        if (error) {
+          throw new Error(error);
+        }
 
-      // Count conversations today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const { count: conversationsToday } = await supabase
-        .from('hp_roundtable_queue')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', today.toISOString());
+        const { activeAgents, conversationsToday, completedMissions, autonomy, succeededConversations, totalConversations } = data;
 
-      // Count completed missions
-      const { count: completedMissions } = await supabase
-        .from('hp_missions')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'completed');
-
-      // Calculate autonomy (conversations succeeded / total conversations)
-      const { count: totalConversations } = await supabase
-        .from('hp_roundtable_queue')
-        .select('*', { count: 'exact', head: true });
-      
-      const { count: succeededConversations } = await supabase
-        .from('hp_roundtable_queue')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'succeeded');
-
-      const autonomy = totalConversations && totalConversations > 0 
-        ? Math.round((succeededConversations || 0) / totalConversations * 100)
-        : 0;
-
-      console.log('✅ Metrics fetched:', { activeAgents, conversationsToday, completedMissions, autonomy });
-      
-      setKpis([
-        { title: 'Active Agents', current: activeAgents, target: 13, unit: '', trend: 'stable' as const, trendValue: `${activeAgents}/13` },
-        { title: 'Conversations Today', current: conversationsToday || 0, target: 8, unit: '', trend: 'up' as const, trendValue: `${conversationsToday || 0} today` },
-        { title: 'Missions Completed', current: completedMissions || 0, target: 10, unit: '', trend: 'stable' as const, trendValue: `${completedMissions || 0} total` },
-        { title: 'System Autonomy', current: autonomy, target: 95, unit: '%', trend: 'up' as const, trendValue: `${succeededConversations || 0}/${totalConversations || 0}` },
-      ]);
+        console.log('✅ Metrics fetched:', { activeAgents, conversationsToday, completedMissions, autonomy });
+        
+        setKpis([
+          { title: 'Active Agents', current: activeAgents, target: 13, unit: '', trend: 'stable' as const, trendValue: `${activeAgents}/13` },
+          { title: 'Conversations Today', current: conversationsToday, target: 8, unit: '', trend: 'up' as const, trendValue: `${conversationsToday} today` },
+          { title: 'Missions Completed', current: completedMissions, target: 10, unit: '', trend: 'stable' as const, trendValue: `${completedMissions} total` },
+          { title: 'System Autonomy', current: autonomy, target: 95, unit: '%', trend: 'up' as const, trendValue: `${succeededConversations}/${totalConversations}` },
+        ]);
       } catch (error) {
         console.error('❌ Error fetching metrics:', error);
       }

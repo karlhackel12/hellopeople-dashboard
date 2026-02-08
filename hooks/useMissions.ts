@@ -13,21 +13,19 @@ export function useMissions() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Initial fetch
+    // Initial fetch via API route (uses SERVICE_ROLE key)
     const fetchMissions = async () => {
       try {
-        const { data, error } = await supabase
-          .from('hp_missions')
-          .select(`
-            *,
-            proposal:hp_proposals(*)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (error) throw error;
-        setMissions(data as any);
+        const response = await fetch('/api/missions');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const { data, error: apiError } = await response.json();
+        
+        if (apiError) throw new Error(apiError);
+        setMissions(data || []);
       } catch (err) {
+        console.error('Error fetching missions:', err);
         setError(err as Error);
       } finally {
         setLoading(false);
@@ -36,7 +34,7 @@ export function useMissions() {
 
     fetchMissions();
 
-    // Real-time subscription
+    // Real-time subscription (still works with ANON key for listening to changes)
     const channel = supabase
       .channel('missions')
       .on(
@@ -48,15 +46,13 @@ export function useMissions() {
         },
         async (payload) => {
           if (payload.eventType === 'INSERT') {
-            // Fetch the full mission with proposal
-            const { data } = await supabase
-              .from('hp_missions')
-              .select(`*, proposal:hp_proposals(*)`)
-              .eq('id', payload.new.id)
-              .single();
-            
-            if (data) {
-              setMissions((prev) => [data as any, ...prev]);
+            // Fetch the full mission with proposal via API
+            const response = await fetch(`/api/missions?id=${payload.new.id}`);
+            if (response.ok) {
+              const { data } = await response.json();
+              if (data) {
+                setMissions((prev) => [data, ...prev]);
+              }
             }
           } else if (payload.eventType === 'UPDATE') {
             setMissions((prev) =>
@@ -87,15 +83,16 @@ export function useMission(id: string) {
   useEffect(() => {
     const fetchMission = async () => {
       try {
-        const { data, error } = await supabase
-          .from('hp_missions')
-          .select(`*, proposal:hp_proposals(*)`)
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
-        setMission(data as any);
+        const response = await fetch(`/api/missions?id=${id}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const { data, error: apiError } = await response.json();
+        
+        if (apiError) throw new Error(apiError);
+        setMission(data);
       } catch (err) {
+        console.error('Error fetching mission:', err);
         setError(err as Error);
       } finally {
         setLoading(false);

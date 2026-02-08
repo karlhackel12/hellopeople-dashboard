@@ -5,8 +5,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ksuqcuimthklsdqyfzwh.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzdXFjdWltdGhrbHNkcXlmendoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDQ5OTY3MywiZXhwIjoyMDg2MDc1NjczfQ.w20nOLonZgh7Z5Z8aEXyOaOm-IIIkUtDuA0NNYQSfzA';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables');
+}
 
 export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -176,14 +180,21 @@ export async function claimNextStep(agent_id: string) {
 
   if (!step) return null;
 
-  // Reserve step
-  await supabaseAdmin
+  // Atomic claim: compare-and-swap (only succeeds if step is still queued)
+  const { data: claimed, error: claimError } = await supabaseAdmin
     .from('hp_mission_steps')
-    .update({ 
+    .update({
       status: 'running',
       reserved_at: new Date().toISOString()
     })
-    .eq('id', step.id);
+    .eq('id', step.id)
+    .eq('status', 'queued')  // Only if STILL queued — atomic CAS
+    .select('id')
+    .maybeSingle();
+
+  if (claimError || !claimed) {
+    return null; // Another worker claimed it
+  }
 
   // Load previous step outputs
   const { data: prevSteps } = await supabaseAdmin
