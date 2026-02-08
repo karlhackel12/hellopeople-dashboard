@@ -21,11 +21,11 @@ interface WorkerStatusData {
 }
 
 const EXPECTED_WORKERS = [
-  { name: 'roundtable-worker', description: 'Conversation orchestration' },
-  { name: 'x-autopost', description: 'Tweet publishing' },
-  { name: 'analyze-worker', description: 'Analysis tasks' },
-  { name: 'content-worker', description: 'Content creation' },
-  { name: 'crawl-worker', description: 'Web crawling' },
+  { name: 'mission-worker', description: 'Executes mission steps with skills' },
+  { name: 'roundtable-worker', description: 'Agent conversation orchestration' },
+  { name: 'initiative-worker', description: 'Agent-driven proposal generation' },
+  { name: 'objective-proposal-worker', description: 'Objective-to-proposal transformation' },
+  { name: 'outcome-learner', description: 'Performance analysis and learning' },
 ];
 
 export function WorkerStatus() {
