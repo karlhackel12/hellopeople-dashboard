@@ -82,9 +82,6 @@ export default function MissionDetailPage({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <Badge className={statusColors[mission.status]}>{mission.status}</Badge>
-            {mission.proposal?.priority && (
-              <Badge variant="outline">{mission.proposal.priority}</Badge>
-            )}
           </div>
           <h2 className="text-3xl font-bold tracking-tight">
             {mission.proposal?.title || 'Untitled Mission'}
