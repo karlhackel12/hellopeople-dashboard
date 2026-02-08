@@ -12,14 +12,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database types
+export interface MissionStep {
+  id: string;
+  mission_id: string;
+  step_kind: string;
+  status: string;
+  input: any;
+  output: any;
+  last_error: string | null;
+  reserved_at: string | null;
+  finished_at: string | null;
+}
+
 export interface Mission {
   id: string;
   proposal_id: string;
-  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  status: 'pending' | 'in-progress' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'blocked';
   started_at: string | null;
-  completed_at: string | null;
-  result: any;
-  created_at: string;
+  finished_at: string | null;
+  steps?: MissionStep[];
 }
 
 export interface Proposal {

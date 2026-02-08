@@ -13,7 +13,8 @@ export async function GET(req: Request) {
         .from('hp_missions')
         .select(`
           *,
-          proposal:hp_proposals(*)
+          proposal:hp_proposals(*),
+          steps:hp_mission_steps(*)
         `)
         .eq('id', missionId)
         .single();
@@ -31,9 +32,10 @@ export async function GET(req: Request) {
       .from('hp_missions')
       .select(`
         *,
-        proposal:hp_proposals(*)
+        proposal:hp_proposals(*),
+        steps:hp_mission_steps(*)
       `)
-      .order('id', { ascending: false })
+      .order('started_at', { ascending: false })
       .limit(parseInt(limit));
 
     if (error) {
