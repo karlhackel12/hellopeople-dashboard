@@ -23,7 +23,7 @@ const statusColors = {
 };
 
 export function MissionCard({ mission, onCancel }: MissionCardProps) {
-  const steps = mission.proposal?.steps || [];
+  const steps = mission.proposal?.step_kinds || [];
   const completedSteps = mission.result?.completed_steps || 0;
   const progress = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
 
@@ -34,9 +34,6 @@ export function MissionCard({ mission, onCancel }: MissionCardProps) {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <Badge className={statusColors[mission.status]}>{mission.status}</Badge>
-              {mission.proposal?.priority && (
-                <Badge variant="outline">{mission.proposal.priority}</Badge>
-              )}
             </div>
             <CardTitle className="text-lg">{mission.proposal?.title || 'Untitled Mission'}</CardTitle>
             <CardDescription>
