@@ -3,20 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  LayoutDashboard, 
-  Target, 
-  Rocket, 
-  Users, 
-  MessageSquare, 
+import {
+  LayoutDashboard,
+  Target,
+  Rocket,
+  Users,
+  MessageSquare,
   Lightbulb,
   Building2,
   FileText,
-  GitPullRequest
+  GitPullRequest,
+  Theater,
+  Settings
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'The Stage', href: '/stage', icon: Theater },
   { name: 'Proposals', href: '/proposals', icon: GitPullRequest },
   { name: 'Missions', href: '/missions', icon: Rocket },
   { name: 'Objectives', href: '/objectives', icon: Target },
@@ -24,6 +27,7 @@ const navigation = [
   { name: 'Conversations', href: '/conversations', icon: MessageSquare },
   { name: 'Deliverables', href: '/deliverables', icon: FileText },
   { name: 'Insights', href: '/insights', icon: Lightbulb },
+  { name: 'Policies', href: '/policies', icon: Settings },
 ];
 
 export function Sidebar() {

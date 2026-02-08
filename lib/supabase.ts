@@ -102,3 +102,32 @@ export interface Deliverable {
   published_at: string | null;
   updated_at: string;
 }
+
+export interface AgentEvent {
+  id: string;
+  agent_id: string;
+  kind: string;
+  title: string;
+  summary: string | null;
+  tags: string[];
+  metadata: any;
+  created_at: string;
+}
+
+export interface Policy {
+  key: string;
+  value: any;
+  updated_at: string;
+}
+
+export interface AgentRelationship {
+  id: string;
+  agent_a: string;
+  agent_b: string;
+  affinity: number;
+  total_interactions: number;
+  positive_interactions: number;
+  negative_interactions: number;
+  drift_log: Array<{ drift: number; reason: string; conversationId: string; at: string }>;
+  updated_at: string;
+}

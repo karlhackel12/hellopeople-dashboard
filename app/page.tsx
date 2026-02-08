@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { KPICard } from '@/components/KPICard';
 import { MissionCard } from '@/components/MissionCard';
+import { WorkerStatus } from '@/components/WorkerStatus';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -301,6 +302,9 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Worker Status Monitor */}
+      <WorkerStatus />
     </div>
   );
 }
