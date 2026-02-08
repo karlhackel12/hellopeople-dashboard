@@ -29,11 +29,11 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', today.toISOString());
 
-    // Count completed missions
+    // Count completed missions (status is 'succeeded' in DB)
     const { count: completedMissions } = await supabaseAdmin
       .from('hp_missions')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'completed');
+      .eq('status', 'succeeded');
 
     // Calculate autonomy (conversations succeeded / total conversations)
     const { count: totalConversations } = await supabaseAdmin

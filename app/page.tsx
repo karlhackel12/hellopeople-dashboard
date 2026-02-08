@@ -8,14 +8,36 @@ import { WorkerStatus } from '@/components/WorkerStatus';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useMissions } from '@/hooks/useMissions';
 import { supabase, Objective, RoundtableQueue } from '@/lib/supabase';
 import { Plus, Users, Calendar, Target } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function DashboardPage() {
-  const { missions, loading } = useMissions();
+  const [missions, setMissions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Fetch missions via API
+  useEffect(() => {
+    const fetchMissions = async () => {
+      try {
+        const res = await fetch('/api/missions?limit=10');
+        if (res.ok) {
+          const { data } = await res.json();
+          setMissions(data || []);
+          setLastUpdated(new Date());
+        }
+      } catch (err) {
+        console.error('Error fetching missions:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMissions();
+    const interval = setInterval(fetchMissions, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
   const [nextConversation, setNextConversation] = useState<RoundtableQueue | null>(null);
 
   // Fetch objectives
@@ -50,7 +72,7 @@ export default function DashboardPage() {
     fetchNextConversation();
   }, []);
 
-  const activeMissions = missions.filter((m) => m.status === 'running' || m.status === 'pending');
+  const activeMissions = missions.filter((m) => m.status === 'running' || m.status === 'in-progress' || m.status === 'pending');
   const recentMissions = missions.slice(0, 5);
 
   // Real KPIs - Autonomous Company Metrics
@@ -101,6 +123,11 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground">
             HelloPeople Autonomous Company - Executive Overview
+            {lastUpdated && (
+              <span className="ml-2 text-xs">
+                · Updated {formatDistanceToNow(lastUpdated, { addSuffix: true })}
+              </span>
+            )}
           </p>
         </div>
         <Link href="/missions/create">
