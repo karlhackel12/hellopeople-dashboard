@@ -14,17 +14,19 @@ interface MissionCardProps {
   onCancel?: (id: string) => void;
 }
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   pending: 'bg-gray-500',
+  'in-progress': 'bg-blue-500',
   running: 'bg-blue-500',
   succeeded: 'bg-green-500',
   failed: 'bg-red-500',
   cancelled: 'bg-orange-500',
+  blocked: 'bg-yellow-500',
 };
 
 export function MissionCard({ mission, onCancel }: MissionCardProps) {
-  const steps = mission.proposal?.step_kinds || [];
-  const completedSteps = mission.result?.completed_steps || 0;
+  const steps = (mission as any).steps || [];
+  const completedSteps = steps.filter((s: any) => s.status === 'succeeded').length;
   const progress = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
 
   return (
@@ -33,7 +35,7 @@ export function MissionCard({ mission, onCancel }: MissionCardProps) {
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <Badge className={statusColors[mission.status]}>{mission.status}</Badge>
+              <Badge className={statusColors[mission.status] || 'bg-gray-500'}>{mission.status}</Badge>
             </div>
             <CardTitle className="text-lg">{mission.proposal?.title || 'Untitled Mission'}</CardTitle>
             <CardDescription>
@@ -47,7 +49,7 @@ export function MissionCard({ mission, onCancel }: MissionCardProps) {
                 View
               </Button>
             </Link>
-            {mission.status === 'running' && onCancel && (
+            {(mission.status === 'running' || mission.status === 'in-progress') && onCancel && (
               <Button size="sm" variant="destructive" onClick={() => onCancel(mission.id)}>
                 <XCircle className="h-4 w-4 mr-1" />
                 Cancel
@@ -75,7 +77,10 @@ export function MissionCard({ mission, onCancel }: MissionCardProps) {
           {mission.started_at ? (
             <span>Started {formatDistanceToNow(new Date(mission.started_at), { addSuffix: true })}</span>
           ) : (
-            <span>Created {formatDistanceToNow(new Date(mission.created_at), { addSuffix: true })}</span>
+            <span>Pending</span>
+          )}
+          {mission.finished_at && (
+            <span> · Finished {formatDistanceToNow(new Date(mission.finished_at), { addSuffix: true })}</span>
           )}
         </div>
       </CardContent>
