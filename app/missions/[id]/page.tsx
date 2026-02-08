@@ -67,7 +67,7 @@ export default function MissionDetailPage({
     );
   }
 
-  const steps = mission.proposal?.steps || [];
+  const steps = mission.proposal?.step_kinds || [];
   const completedSteps = mission.result?.completed_steps || 0;
   const progress = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
 
