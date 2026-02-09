@@ -9,10 +9,29 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase, Objective, KeyResult } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Plus, Target, Edit, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+
+interface KeyResult {
+  title: string;
+  target: number;
+  current: number;
+  unit: string;
+}
+
+interface Objective {
+  id: string;
+  title: string;
+  description?: string;
+  owner?: string;
+  quarter?: string;
+  deadline?: string;
+  status: string;
+  key_results?: KeyResult[];
+  created_at: string;
+  updated_at: string;
+}
 
 export default function ObjectivesPage() {
   const [objectives, setObjectives] = useState<Objective[]>([]);
@@ -35,13 +54,11 @@ export default function ObjectivesPage() {
 
   const fetchObjectives = async () => {
     try {
-      const { data, error } = await supabase
-        .from('hp_objectives')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setObjectives(data || []);
+      const response = await fetch('/api/objectives');
+      if (!response.ok) throw new Error('Failed to fetch objectives');
+      
+      const result = await response.json();
+      setObjectives(result.data || []);
     } catch (error) {
       toast.error('Failed to load objectives');
       console.error(error);
@@ -67,19 +84,22 @@ export default function ObjectivesPage() {
 
     try {
       if (editingObjective) {
-        const { error } = await supabase
-          .from('hp_objectives')
-          .update(formData)
-          .eq('id', editingObjective.id);
+        const response = await fetch(`/api/objectives?id=${editingObjective.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
 
-        if (error) throw error;
+        if (!response.ok) throw new Error('Failed to update objective');
         toast.success('Objective updated');
       } else {
-        const { error } = await supabase
-          .from('hp_objectives')
-          .insert([formData]);
+        const response = await fetch('/api/objectives', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
 
-        if (error) throw error;
+        if (!response.ok) throw new Error('Failed to create objective');
         toast.success('Objective created');
       }
 
@@ -96,12 +116,11 @@ export default function ObjectivesPage() {
     if (!confirm('Are you sure you want to delete this objective?')) return;
 
     try {
-      const { error } = await supabase
-        .from('hp_objectives')
-        .delete()
-        .eq('id', id);
+      const response = await fetch(`/api/objectives?id=${id}`, {
+        method: 'DELETE',
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to delete objective');
       toast.success('Objective deleted');
       fetchObjectives();
     } catch (error) {
@@ -149,10 +168,13 @@ export default function ObjectivesPage() {
   const calculateProgress = (obj: Objective) => {
     if (!obj.key_results || obj.key_results.length === 0) return 0;
     const total = obj.key_results.reduce(
-      (acc, kr) => acc + (kr.current / kr.target) * 100,
+      (acc, kr) => {
+        if (kr.target === 0) return acc;
+        return acc + (kr.current / kr.target) * 100;
+      },
       0
     );
-    return total / obj.key_results.length;
+    return Math.min(100, total / obj.key_results.length);
   };
 
   if (loading) {
@@ -390,7 +412,7 @@ export default function ObjectivesPage() {
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">Key Results</p>
                     {objective.key_results.map((kr, index) => {
-                      const krProgress = (kr.current / kr.target) * 100;
+                      const krProgress = kr.target > 0 ? (kr.current / kr.target) * 100 : 0;
                       return (
                         <div key={index} className="space-y-1">
                           <div className="flex justify-between text-xs">
@@ -399,7 +421,7 @@ export default function ObjectivesPage() {
                               {kr.current}/{kr.target} {kr.unit}
                             </span>
                           </div>
-                          <Progress value={krProgress} className="h-1" />
+                          <Progress value={Math.min(100, krProgress)} className="h-1" />
                         </div>
                       );
                     })}

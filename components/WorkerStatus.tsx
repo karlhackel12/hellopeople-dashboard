@@ -20,12 +20,18 @@ interface WorkerStatusData {
   updated_at: string;
 }
 
-const EXPECTED_WORKERS = [
-  { name: 'mission-worker', description: 'Executes mission steps with skills' },
-  { name: 'roundtable-worker', description: 'Agent conversation orchestration' },
-  { name: 'initiative-worker', description: 'Agent-driven proposal generation' },
-  { name: 'objective-proposal-worker', description: 'Objective-to-proposal transformation' },
-  { name: 'outcome-learner', description: 'Performance analysis and learning' },
+interface WorkerConfig {
+  name: string;
+  description: string;
+  interval_minutes?: number; // Expected interval for periodic workers
+}
+
+const EXPECTED_WORKERS: WorkerConfig[] = [
+  { name: 'mission-worker', description: 'Executes mission steps with skills', interval_minutes: 5 },
+  { name: 'roundtable-worker', description: 'Agent conversation orchestration', interval_minutes: 10 },
+  { name: 'initiative-worker', description: 'Agent-driven proposal generation', interval_minutes: 30 },
+  { name: 'objective-proposal-worker', description: 'Objective-to-proposal transformation', interval_minutes: 60 },
+  { name: 'outcome-learner', description: 'Performance analysis and learning', interval_minutes: 60 },
 ];
 
 export function WorkerStatus() {
@@ -62,50 +68,59 @@ export function WorkerStatus() {
     }
   };
 
-  const getWorkerStatus = (workerName: string) => {
+  const getWorkerStatus = (workerName: string, config: WorkerConfig) => {
     const worker = workers.find((w) => w.worker_name === workerName);
     if (!worker) return null;
 
     const minutesSinceHeartbeat = (Date.now() - new Date(worker.last_heartbeat).getTime()) / 60000;
+    const interval = config.interval_minutes || 5;
 
-    // If no heartbeat in 5+ minutes, consider it stopped/crashed
-    if (minutesSinceHeartbeat > 5) {
-      return { ...worker, status: 'stopped' as const };
+    // Determine health status based on interval
+    let healthStatus: 'healthy' | 'warning' | 'error' | 'unknown';
+    
+    if (minutesSinceHeartbeat < interval * 2) {
+      healthStatus = 'healthy';
+    } else if (minutesSinceHeartbeat < interval * 3) {
+      healthStatus = 'warning';
+    } else {
+      healthStatus = 'error';
     }
 
-    return worker;
+    return { ...worker, healthStatus, minutesSinceHeartbeat };
   };
 
-  const getStatusBadge = (status: string | null) => {
-    if (!status) {
+  const getStatusBadge = (workerData: ReturnType<typeof getWorkerStatus>) => {
+    if (!workerData) {
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" />
-          Unknown
+          No Data
         </Badge>
       );
     }
 
-    switch (status) {
-      case 'running':
+    const { healthStatus, minutesSinceHeartbeat } = workerData;
+
+    switch (healthStatus) {
+      case 'healthy':
         return (
           <Badge className="bg-green-500 flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
-            Running
+            Healthy
           </Badge>
         );
-      case 'stopped':
+      case 'warning':
         return (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <XCircle className="h-3 w-3" />
-            Stopped
+          <Badge className="bg-yellow-500 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Delayed
           </Badge>
         );
-      case 'crashed':
+      case 'error':
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
-            Crashed
+            Stale
           </Badge>
         );
       default:
@@ -189,7 +204,10 @@ setInterval(async () => {
     );
   }
 
-  const runningCount = workers.filter((w) => w.status === 'running').length;
+  const healthyCount = EXPECTED_WORKERS.filter((config) => {
+    const workerData = getWorkerStatus(config.name, config);
+    return workerData && workerData.healthStatus === 'healthy';
+  }).length;
   const totalCount = EXPECTED_WORKERS.length;
 
   return (
@@ -200,8 +218,8 @@ setInterval(async () => {
             <CardTitle className="flex items-center gap-2">
               <Activity className="h-5 w-5" />
               Worker Status
-              <Badge variant={runningCount === totalCount ? 'default' : 'destructive'}>
-                {runningCount}/{totalCount} Running
+              <Badge variant={healthyCount === totalCount ? 'default' : 'destructive'}>
+                {healthyCount}/{totalCount} Healthy
               </Badge>
             </CardTitle>
             <CardDescription>
@@ -216,42 +234,44 @@ setInterval(async () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {EXPECTED_WORKERS.map((expectedWorker) => {
-            const worker = getWorkerStatus(expectedWorker.name);
-            const minutesSinceHeartbeat = worker
-              ? (Date.now() - new Date(worker.last_heartbeat).getTime()) / 60000
-              : null;
+          {EXPECTED_WORKERS.map((config) => {
+            const workerData = getWorkerStatus(config.name, config);
 
             return (
               <div
-                key={expectedWorker.name}
+                key={config.name}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium text-sm">{expectedWorker.name}</p>
-                    {getStatusBadge(worker?.status || null)}
+                    <p className="font-medium text-sm">{config.name}</p>
+                    {getStatusBadge(workerData)}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {expectedWorker.description}
+                    {config.description}
                   </p>
-                  {worker && (
+                  {workerData ? (
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {formatDistanceToNow(new Date(worker.last_heartbeat), {
+                        Last run: {formatDistanceToNow(new Date(workerData.last_heartbeat), {
                           addSuffix: true,
                         })}
                       </span>
-                      <span>Jobs: {worker.jobs_processed}</span>
-                      {worker.error_count > 0 && (
-                        <span className="text-red-600">Errors: {worker.error_count}</span>
+                      <span>Jobs: {workerData.jobs_processed}</span>
+                      {workerData.error_count > 0 && (
+                        <span className="text-red-600">Errors: {workerData.error_count}</span>
                       )}
-                      {worker.circuit_breaker_open && (
+                      {workerData.circuit_breaker_open && (
                         <Badge variant="destructive" className="text-xs">
                           Circuit Breaker Open
                         </Badge>
                       )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                      <AlertTriangle className="h-3 w-3" />
+                      No data available
                     </div>
                   )}
                 </div>

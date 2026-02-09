@@ -7,9 +7,25 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { supabase, Deliverable } from '@/lib/supabase';
 import { FileText, ExternalLink, Tag } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+
+interface Deliverable {
+  id: string;
+  agent_id: string;
+  conversation_id?: string;
+  mission_id?: string;
+  title: string;
+  description?: string;
+  type: 'post' | 'code' | 'document' | 'design' | 'video' | 'article' | 'report' | 'other';
+  status: 'draft' | 'review' | 'published' | 'archived';
+  url?: string;
+  content?: string | object;
+  tags?: string[];
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 const typeIcons: Record<Deliverable['type'], string> = {
   post: '📱',
@@ -39,47 +55,19 @@ export default function DeliverablesPage() {
 
   useEffect(() => {
     fetchDeliverables();
-
-    // Real-time subscription
-    const channel = supabase
-      .channel('deliverables')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'hp_deliverables',
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setDeliverables((prev) => [payload.new as Deliverable, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setDeliverables((prev) =>
-              prev.map((d) =>
-                d.id === payload.new.id ? (payload.new as Deliverable) : d
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setDeliverables((prev) => prev.filter((d) => d.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchDeliverables, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDeliverables = async () => {
     try {
-      const { data, error } = await supabase
-        .from('hp_deliverables')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setDeliverables(data || []);
+      const response = await fetch('/api/deliverables');
+      if (!response.ok) throw new Error('Failed to fetch deliverables');
+      
+      const result = await response.json();
+      setDeliverables(result.data || []);
     } catch (error) {
       console.error('Failed to fetch deliverables:', error);
     } finally {
