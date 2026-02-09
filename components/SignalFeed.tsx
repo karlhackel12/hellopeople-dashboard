@@ -2,37 +2,54 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { supabase, AgentEvent } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Activity, CheckCircle, XCircle, Clock, Zap } from 'lucide-react';
+import { Search, Activity, CheckCircle, XCircle, Clock, Zap, MessageCircle, Brain } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+export interface AgentEvent {
+  id: string;
+  kind: string;
+  title: string;
+  summary?: string;
+  agent_id: string;
+  created_at: string;
+  tags: string[];
+  payload?: any;
+}
+
 const EVENT_COLORS: Record<string, string> = {
-  mission_started: 'bg-blue-500',
-  mission_succeeded: 'bg-green-500',
-  mission_failed: 'bg-red-500',
+  step_started: 'bg-blue-500',
+  step_succeeded: 'bg-green-500',
+  step_failed: 'bg-red-500',
   conversation_started: 'bg-purple-500',
   conversation_completed: 'bg-purple-600',
+  memory_created: 'bg-pink-500',
   proposal_created: 'bg-yellow-500',
   proposal_accepted: 'bg-green-600',
   proposal_rejected: 'bg-red-600',
-  memory_created: 'bg-pink-500',
+  mission_started: 'bg-blue-600',
+  mission_succeeded: 'bg-green-600',
+  mission_failed: 'bg-red-600',
   insight_promoted: 'bg-orange-500',
   tweet_posted: 'bg-cyan-500',
   default: 'bg-gray-500',
 };
 
 const EVENT_ICONS: Record<string, any> = {
-  mission_started: Clock,
-  mission_succeeded: CheckCircle,
-  mission_failed: XCircle,
-  conversation_started: Activity,
+  step_started: Clock,
+  step_succeeded: CheckCircle,
+  step_failed: XCircle,
+  conversation_started: MessageCircle,
   conversation_completed: CheckCircle,
+  memory_created: Brain,
   proposal_created: Zap,
   proposal_accepted: CheckCircle,
   proposal_rejected: XCircle,
+  mission_started: Clock,
+  mission_succeeded: CheckCircle,
+  mission_failed: XCircle,
   default: Activity,
 };
 
@@ -46,46 +63,29 @@ export function SignalFeed() {
 
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Fetch initial events
+  // Fetch events from API
+  const fetchEvents = async () => {
+    try {
+      const response = await fetch('/api/events');
+      const data = await response.json();
+      setEvents(data.events || []);
+      setFilteredEvents(data.events || []);
+    } catch (error) {
+      console.error('Failed to fetch events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('hp_events')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(500);
-
-        if (error) throw error;
-        setEvents(data || []);
-        setFilteredEvents(data || []);
-      } catch (error) {
-        console.error('Failed to fetch events:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchEvents();
   }, []);
 
-  // Real-time subscription
+  // Poll for updates every 10 seconds
   useEffect(() => {
-    const channel = supabase
-      .channel('signal-feed')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'hp_events' },
-        (payload) => {
-          const newEvent = payload.new as AgentEvent;
-          setEvents((prev) => [newEvent, ...prev].slice(0, 500)); // Keep max 500 events
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(fetchEvents, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Filter events
@@ -123,8 +123,8 @@ export function SignalFeed() {
     overscan: 10,
   });
 
-  const uniqueAgents = Array.from(new Set(events.map((e) => e.agent_id)));
-  const uniqueKinds = Array.from(new Set(events.map((e) => e.kind)));
+  const uniqueAgents = Array.from(new Set(events.map((e) => e.agent_id))).sort();
+  const uniqueKinds = Array.from(new Set(events.map((e) => e.kind))).sort();
 
   if (loading) {
     return (
@@ -168,7 +168,7 @@ export function SignalFeed() {
             <SelectItem value="all">All Events</SelectItem>
             {uniqueKinds.map((kind) => (
               <SelectItem key={kind} value={kind}>
-                {kind}
+                {kind.replace(/_/g, ' ')}
               </SelectItem>
             ))}
           </SelectContent>
@@ -180,10 +180,10 @@ export function SignalFeed() {
         <p className="text-sm text-muted-foreground">
           Showing {filteredEvents.length} of {events.length} events
         </p>
-        {filteredEvents.length > 0 && (
+        {events.length > 0 && (
           <Badge variant="outline" className="animate-pulse">
             <div className="h-2 w-2 rounded-full bg-green-500 mr-2" />
-            Live
+            Live (10s)
           </Badge>
         )}
       </div>
@@ -225,12 +225,12 @@ export function SignalFeed() {
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <Badge variant="outline" className="text-xs">
                             {event.agent_id}
                           </Badge>
                           <Badge variant="secondary" className="text-xs">
-                            {event.kind}
+                            {event.kind.replace(/_/g, ' ')}
                           </Badge>
                           <span className="text-xs text-muted-foreground ml-auto">
                             {formatDistanceToNow(new Date(event.created_at), {
@@ -246,7 +246,7 @@ export function SignalFeed() {
                         )}
                         {event.tags && event.tags.length > 0 && (
                           <div className="flex gap-1 mt-2 flex-wrap">
-                            {event.tags.map((tag, idx) => (
+                            {event.tags.slice(0, 3).map((tag, idx) => (
                               <Badge key={idx} variant="outline" className="text-xs">
                                 {tag}
                               </Badge>

@@ -30,12 +30,11 @@ export default function ProposalsPage() {
 
   const fetchProposals = async () => {
     try {
-      const { data, error } = await supabase
-        .from('hp_proposals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const response = await fetch('/api/proposals');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const { data, error } = await response.json();
+      
+      if (error) throw new Error(error);
       setProposals(data || []);
     } catch (error) {
       toast.error('Failed to load proposals');
